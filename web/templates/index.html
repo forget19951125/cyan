@@ -34,11 +34,17 @@
             <div class="chart-controls">
                 <div class="dashboard-header">
                     <h2>指标看板</h2>
-                    <div class="config-buttons">
-                        <button class="config-btn" onclick="showConfig('main')">⚙️ 主看板</button>
-                        <button class="config-btn" onclick="showConfig('macd')">⚙️ MACD</button>
-                        <button class="config-btn" onclick="showConfig('cci')">⚙️ CCI</button>
-                        <button class="config-btn" onclick="showConfig('rsi')">⚙️ RSI</button>
+                    <div class="header-controls">
+                        <label class="grid-toggle">
+                            <input type="checkbox" id="grid-toggle" checked onchange="toggleGridLines()">
+                            <span>网格线</span>
+                        </label>
+                        <div class="config-buttons">
+                            <button class="config-btn" onclick="showConfig('main')">⚙️ 主看板</button>
+                            <button class="config-btn" onclick="showConfig('macd')">⚙️ MACD</button>
+                            <button class="config-btn" onclick="showConfig('cci')">⚙️ CCI</button>
+                            <button class="config-btn" onclick="showConfig('rsi')">⚙️ RSI</button>
+                        </div>
                     </div>
                 </div>
                 

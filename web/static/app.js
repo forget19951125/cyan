@@ -3,6 +3,7 @@ let unifiedChart = null;
 let ws = null;
 let reconnectTimer = null;
 let currentConfig = null;
+let showGridLines = true; // 网格线显示状态
 
 // 初始化
 document.addEventListener('DOMContentLoaded', function() {
@@ -12,6 +13,16 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 延迟设置同步对齐线
     setTimeout(syncChartsCrosshair, 1000);
+    
+    // 窗口resize时更新grid配置
+    window.addEventListener('resize', function() {
+        if (unifiedChart) {
+            unifiedChart.setOption({
+                grid: getGridConfig()
+            });
+            unifiedChart.resize();
+        }
+    });
     
     // 绑定事件
     document.getElementById('symbol-selector').addEventListener('change', function() {
@@ -32,47 +43,75 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+// 计算grid配置（支持20px间隔）
+function getGridConfig() {
+    const chartElement = document.getElementById('unified-chart');
+    const chartHeight = chartElement ? chartElement.offsetHeight : 800;
+    
+    // 计算各看板位置
+    // 主看板：top: 1%, height: 43%
+    const mainTop = Math.round(chartHeight * 0.01);
+    const mainHeight = Math.round(chartHeight * 0.43);
+    const mainBottom = mainTop + mainHeight;
+    
+    // MACD：在主看板下方20px处开始，height: 17%
+    const macdTop = mainBottom + 20;
+    const macdHeight = Math.round(chartHeight * 0.17);
+    const macdBottom = macdTop + macdHeight;
+    
+    // CCI：在MACD下方20px处开始，height: 17%
+    const cciTop = macdBottom + 20;
+    const cciHeight = Math.round(chartHeight * 0.17);
+    const cciBottom = cciTop + cciHeight;
+    
+    // RSI：在CCI下方20px处开始，使用bottom定位
+    const rsiTop = cciBottom + 20;
+    const rsiBottom = Math.round(chartHeight * 0.08);
+    
+    return [
+        // 主看板
+        {
+            id: 'main',
+            left: '3%',
+            right: '8%',
+            top: mainTop,
+            height: mainHeight
+        },
+        // MACD看板 - 与主看板间隔20px
+        {
+            id: 'macd',
+            left: '3%',
+            right: '8%',
+            top: macdTop,
+            height: macdHeight
+        },
+        // CCI看板 - 与MACD间隔20px
+        {
+            id: 'cci',
+            left: '3%',
+            right: '8%',
+            top: cciTop,
+            height: cciHeight
+        },
+        // RSI看板 - 与CCI间隔20px
+        {
+            id: 'rsi',
+            left: '3%',
+            right: '8%',
+            top: rsiTop,
+            bottom: rsiBottom
+        }
+    ];
+}
+
 // 初始化统一图表
 function initUnifiedChart() {
     unifiedChart = echarts.init(document.getElementById('unified-chart'));
     
     unifiedChart.setOption({
         backgroundColor: 'transparent',
-        // 定义4个grid区域，主看板占更大空间，更紧密布局
-        grid: [
-            // 主看板 - 占43%高度
-            {
-                id: 'main',
-                left: '3%',  // 左边不留空间（无图例）
-                right: '8%', // 右边留更多空间给Y轴标签，避免重叠
-                top: '1%',
-                height: '43%'
-            },
-            // MACD看板 - 占17%高度
-            {
-                id: 'macd',
-                left: '3%',
-                right: '8%', // 右边留更多空间给Y轴标签，避免重叠
-                top: '45%',
-                height: '17%'
-            },
-            // CCI看板 - 占17%高度
-            {
-                id: 'cci',
-                left: '3%',
-                right: '8%', // 右边留更多空间给Y轴标签，避免重叠
-                top: '63%',
-                height: '17%'
-            },
-            // RSI看板 - 占15%高度（最底部，显示时间标签，底部留出空间）
-            {
-                id: 'rsi',
-                left: '3%',
-                right: '8%', // 右边留更多空间给Y轴标签，避免重叠
-                top: '81%',
-                bottom: '8%'  // 底部留出8%空间给时间标签
-            }
-        ],
+        // 定义4个grid区域，主看板占更大空间，每个看板之间增加20px间隔
+        grid: getGridConfig(),
         // 共享的X轴（只在最底部显示时间标签）
         xAxis: [
             // 主看板X轴（不显示标签，但显示对齐线）
@@ -205,7 +244,7 @@ function initUnifiedChart() {
                     width: 50,  // 限制标签宽度，避免重叠
                     overflow: 'truncate'  // 超出部分截断
                 },
-                splitLine: { lineStyle: { color: '#2b3139' } },
+                splitLine: { show: showGridLines, lineStyle: { color: '#2b3139' } },
                 axisPointer: {
                     type: 'line',
                     lineStyle: {
@@ -228,7 +267,7 @@ function initUnifiedChart() {
                     width: 50,  // 限制标签宽度，避免重叠
                     overflow: 'truncate'  // 超出部分截断
                 },
-                splitLine: { lineStyle: { color: '#2b3139' } },
+                splitLine: { show: showGridLines, lineStyle: { color: '#2b3139' } },
                 axisPointer: {
                     type: 'line',
                     lineStyle: {
@@ -251,7 +290,7 @@ function initUnifiedChart() {
                     width: 50,  // 限制标签宽度，避免重叠
                     overflow: 'truncate'  // 超出部分截断
                 },
-                splitLine: { lineStyle: { color: '#2b3139' } },
+                splitLine: { show: showGridLines, lineStyle: { color: '#2b3139' } },
                 axisPointer: {
                     type: 'line',
                     lineStyle: {
@@ -276,7 +315,7 @@ function initUnifiedChart() {
                     width: 50,  // 限制标签宽度，避免重叠
                     overflow: 'truncate'  // 超出部分截断
                 },
-                splitLine: { lineStyle: { color: '#2b3139' } },
+                splitLine: { show: showGridLines, lineStyle: { color: '#2b3139' } },
                 axisPointer: {
                     type: 'line',
                     lineStyle: {
@@ -726,19 +765,23 @@ function updateUnifiedChart(data) {
                 min: priceRange.min,
                 max: priceRange.max,
                 scale: false,
-                position: 'right' // 保持Y轴在右边
+                position: 'right', // 保持Y轴在右边
+                splitLine: { show: showGridLines, lineStyle: { color: '#2b3139' } }
             },
             {
                 gridIndex: 1,
-                position: 'right' // 保持Y轴在右边
+                position: 'right', // 保持Y轴在右边
+                splitLine: { show: showGridLines, lineStyle: { color: '#2b3139' } }
             },
             {
                 gridIndex: 2,
-                position: 'right' // 保持Y轴在右边
+                position: 'right', // 保持Y轴在右边
+                splitLine: { show: showGridLines, lineStyle: { color: '#2b3139' } }
             },
             {
                 gridIndex: 3,
-                position: 'right' // 保持Y轴在右边
+                position: 'right', // 保持Y轴在右边
+                splitLine: { show: showGridLines, lineStyle: { color: '#2b3139' } }
             }
         ],
         legend: {
@@ -921,9 +964,7 @@ function calculatePriceRange(klines) {
 }
 
 // 窗口大小改变时调整图表
-window.addEventListener('resize', function() {
-    if (unifiedChart) unifiedChart.resize();
-});
+// resize事件已在DOMContentLoaded中处理，这里不再需要
 
 // 同步对齐线 - 使用graphic手动绘制对齐线
 function syncChartsCrosshair() {
@@ -1040,6 +1081,27 @@ function syncChartsCrosshair() {
     });
     
     console.log('✓ 同步对齐线已启用 - 使用graphic手动绘制');
+}
+
+// 切换网格线显示
+function toggleGridLines() {
+    const checkbox = document.getElementById('grid-toggle');
+    showGridLines = checkbox.checked;
+    
+    // 更新所有yAxis的splitLine配置
+    if (unifiedChart) {
+        const yAxisUpdate = [];
+        
+        for (let i = 0; i < 4; i++) {
+            yAxisUpdate.push({
+                splitLine: { show: showGridLines, lineStyle: { color: '#2b3139' } }
+            });
+        }
+        
+        unifiedChart.setOption({
+            yAxis: yAxisUpdate
+        });
+    }
 }
 
 // 加载配置
