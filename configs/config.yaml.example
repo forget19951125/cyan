@@ -1,0 +1,41 @@
+# 环境配置: "test" 使用测试网, "production" 使用正式环境
+environment: "test"  # 本地测试使用 test，部署时改为 production
+
+# 数据库配置
+database:
+  mysql:
+    host: "localhost"
+    port: 3306
+    user: "root"
+    password: "your_mysql_password"
+    database: "binance_indicators"
+  redis:
+    host: "localhost"
+    port: 6379
+    password: ""  # Redis密码，如果未设置则留空
+    db: 0
+
+# Binance API配置
+exchange:
+  name: "binance"
+  # 测试网API密钥（当environment=test时使用）
+  test_api_key: "your_testnet_api_key"
+  test_api_secret: "your_testnet_api_secret"
+  # 正式环境API密钥（当environment=production时使用）
+  prod_api_key: "your_production_api_key"
+  prod_api_secret: "your_production_api_secret"
+
+# 日志配置
+logging:
+  level: "info"  # debug, info, warn, error
+  file: "logs/indicators.log"
+
+# Web服务配置
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+# 指标缓存配置
+cache:
+  ttl: 300  # 指标缓存过期时间（秒），默认5分钟
+

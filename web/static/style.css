@@ -1,0 +1,233 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+    background: #1e2026;
+    color: #eaecef;
+    min-height: 100vh;
+    line-height: 1.6;
+    overflow-y: auto; /* 允许垂直滚动 */
+}
+
+.container {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 20px;
+    min-height: 100vh;
+}
+
+.header {
+    background: #181a20;
+    border: 1px solid #2b3139;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header h1 {
+    color: #f3ba2f;
+    font-size: 1.8em;
+}
+
+.controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.control-item {
+    padding: 8px 16px;
+    background: #2b3139;
+    color: #eaecef;
+    border: 1px solid #2b3139;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: all 0.3s;
+}
+
+.control-item:hover {
+    background: #3a3f47;
+    border-color: #3a3f47;
+}
+
+.control-item:focus {
+    outline: none;
+    border-color: #f3ba2f;
+}
+
+.status {
+    padding: 8px 16px;
+    font-size: 0.9em;
+    color: #eaecef;
+}
+
+/* 统一图表容器 - TradingView风格 */
+.unified-chart-container {
+    background: #181a20;
+    border: 1px solid #2b3139;
+    border-radius: 8px;
+    padding: 15px;
+    padding-bottom: 25px; /* 底部增加内边距，为时间标签留出空间 */
+    height: calc(100vh - 120px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.chart-controls {
+    flex-shrink: 0;
+    margin-bottom: 5px; /* 减少间距 */
+}
+
+.chart-controls .dashboard-header {
+    margin-bottom: 5px; /* 减少标题间距 */
+}
+
+.unified-chart {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    pointer-events: auto;  /* 确保可以接收鼠标事件 */
+}
+
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-shrink: 0;
+}
+
+.dashboard-header h2 {
+    color: #f3ba2f;
+    font-size: 0.9em; /* 缩小标题 */
+    margin: 0;
+    font-weight: normal;
+}
+
+.config-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.config-btn {
+    padding: 4px 8px; /* 缩小按钮 */
+    background: #2b3139;
+    color: #eaecef;
+    border: 1px solid #2b3139;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75em; /* 缩小字体 */
+    transition: all 0.3s;
+}
+
+.config-btn:hover {
+    background: #3a3f47;
+    border-color: #f3ba2f;
+}
+
+.config-panel {
+    background: #1e2026;
+    border: 1px solid #2b3139;
+    border-radius: 6px;
+    padding: 10px; /* 减少内边距 */
+    margin-bottom: 5px; /* 减少间距 */
+}
+
+.config-panel h3 {
+    color: #f3ba2f;
+    font-size: 0.85em; /* 缩小标题 */
+    margin-bottom: 8px; /* 减少间距 */
+}
+
+.config-panel h4 {
+    color: #eaecef;
+    font-size: 0.9em;
+    margin: 10px 0 8px 0;
+}
+
+.config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.config-group {
+    border: 1px solid #2b3139;
+    border-radius: 4px;
+    padding: 10px;
+    background: #181a20;
+}
+
+.config-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.config-item:last-child {
+    margin-bottom: 0;
+}
+
+.config-item label {
+    color: #848e9c;
+    font-size: 0.85em;
+    margin-right: 10px;
+}
+
+.config-item input {
+    width: 80px;
+    padding: 4px 8px;
+    background: #181a20;
+    color: #eaecef;
+    border: 1px solid #2b3139;
+    border-radius: 4px;
+    font-size: 0.85em;
+}
+
+.config-item input:focus {
+    outline: none;
+    border-color: #f3ba2f;
+}
+
+.apply-btn {
+    width: 100%;
+    padding: 8px;
+    background: #f3ba2f;
+    color: #1e2026;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 0.9em;
+    transition: all 0.3s;
+}
+
+.apply-btn:hover {
+    background: #f5c842;
+}
+
+.chart {
+    width: 100%;
+    flex: 1;
+    min-height: 0; /* 允许flex子元素缩小 */
+}
+
+/* 响应式设计 */
+@media (max-width: 1024px) {
+    .dashboards-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: repeat(4, 1fr);
+        height: auto; /* 小屏幕时允许滚动 */
+    }
+}
