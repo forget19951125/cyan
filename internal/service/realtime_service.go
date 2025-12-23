@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"sync"
 	"time"
 
@@ -63,6 +64,7 @@ type BollingerData struct {
 	Upper  []float64 `json:"upper"`
 	Middle []float64 `json:"middle"`
 	Lower  []float64 `json:"lower"`
+	Zone   int       `json:"zone"` // 当前价格所在的分区号（-10到+10，0为中轨）
 }
 
 // EnvelopeData 包络线数据
@@ -70,6 +72,7 @@ type EnvelopeData struct {
 	Upper  []float64 `json:"upper"`
 	Middle []float64 `json:"middle"`
 	Lower  []float64 `json:"lower"`
+	Zone   int       `json:"zone"` // 当前价格所在的分区号（-10到+10，0为中轨）
 }
 
 // NewRealtimeService 创建实时数据服务
@@ -444,6 +447,12 @@ func (r *RealtimeService) calculateAndPush() {
 	envPeriod := scalePeriod(config.Env_Period)
 	envUpper, envMiddle, envLower := indicators.CalculateEnvelope(hlcc, envPeriod, config.Env_Deviation)
 
+	// 计算当前价格在布林线和包络线的分区号（索引0是最新数据）
+	// 分区规则：中轨为0，向上+1到+10，向下-1到-10，共20个分区
+	currentPrice := close[0]
+	bollZone := calculateZone(currentPrice, bollMiddle[0], bollUpper[0], bollLower[0])
+	envZone := calculateZone(currentPrice, envMiddle[0], envUpper[0], envLower[0])
+
 	// 计算5天平均波动价格值（不包括当前日，不受K线周期影响，固定取前5个自然天）
 	// klines数组是原始顺序（从旧到新），CalculateVolatility5Days需要这个顺序
 	// 但函数内部会跳过索引0（当前日），所以直接传入klines即可
@@ -477,11 +486,13 @@ func (r *RealtimeService) calculateAndPush() {
 			Upper:  bollUpper,
 			Middle: bollMiddle,
 			Lower:  bollLower,
+			Zone:   bollZone,
 		},
 		Envelope: EnvelopeData{
 			Upper:  envUpper,
 			Middle: envMiddle,
 			Lower:  envLower,
+			Zone:   envZone,
 		},
 	}
 
@@ -520,4 +531,59 @@ func (r *RealtimeService) Close() error {
 		return r.wsClient.Close()
 	}
 	return nil
+}
+
+// calculateZone 计算价格所在的分区号
+// price: 当前价格
+// middle: 中轨价格
+// upper: 上轨价格
+// lower: 下轨价格
+// 返回分区号：-10到+10，0为中轨
+// 分区规则：中轨为0，向上等分10个分区（+1到+10），向下等分10个分区（-1到-10）
+func calculateZone(price, middle, upper, lower float64) int {
+	if middle == 0 {
+		return 0
+	}
+
+	// 如果价格在中轨，返回0
+	if math.Abs(price-middle) < 0.0001 {
+		return 0
+	}
+
+	// 计算价格相对于中轨的位置
+	if price > middle {
+		// 价格在中轨上方
+		upperRange := upper - middle
+		if upperRange <= 0 {
+			return 10 // 如果上轨等于中轨，返回最大分区
+		}
+		// 计算分区：0到+10
+		// 将上轨到中轨的范围等分为10个分区
+		ratio := (price - middle) / upperRange
+		zone := int(ratio * 10)
+		if zone >= 10 {
+			zone = 10
+		}
+		if zone < 1 {
+			zone = 1
+		}
+		return zone
+	} else {
+		// 价格在中轨下方
+		lowerRange := middle - lower
+		if lowerRange <= 0 {
+			return -10 // 如果下轨等于中轨，返回最小分区
+		}
+		// 计算分区：0到-10
+		// 将中轨到下轨的范围等分为10个分区
+		ratio := (middle - price) / lowerRange
+		zone := -int(ratio * 10)
+		if zone <= -10 {
+			zone = -10
+		}
+		if zone > -1 {
+			zone = -1
+		}
+		return zone
+	}
 }

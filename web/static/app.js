@@ -439,6 +439,89 @@ function initUnifiedChart() {
                             result += '<span style="color: #eaecef; font-size: 10px;">' + item.name + '</span>: <span style="color: #fff; font-weight: bold; font-size: 10px;">' + item.value + '</span>';
                             result += '</div>';
                         });
+                        // 如果是主看板，显示当前K线的分区号
+                        if (gridIdx === 0) {
+                            const currentData = window.currentChartData;
+                            if (currentData && currentData.bollinger && currentData.envelope) {
+                                // 重要：虽然timeAxisData已经反转了（索引0是最新K线的时间），
+                                // 但ECharts的category类型xAxis从左到右显示，所以：
+                                // - xAxis.data[0] 显示在最左侧（最旧的K线）
+                                // - xAxis.data[length-1] 显示在最右侧（最新的K线）
+                                // 因此：dataIndex=0是最旧K线，dataIndex=length-1是最新K线
+                                // 后端返回的bollinger/envelope数组，索引0是最新数据
+                                // 所以需要转换：
+                                // - dataIndex=length-1（最新）-> originalIndex=0（最新）
+                                // - dataIndex=0（最旧）-> originalIndex=length-1（最旧）
+                                // 转换公式：originalIndex = length - 1 - dataIndex
+                                const originalIndex = currentData.bollinger.upper.length - 1 - dataIndex;
+                                
+                                // 获取反转后的klines数组（klines[0]是最新）
+                                // 注意：currentData.klines是原始顺序（从旧到新），需要反转
+                                const reversedKlines = currentData.klines.slice().reverse();
+                                
+                                // dataIndex对应反转后的klines数组索引（0是最新）
+                                const klineIndex = dataIndex;
+                                
+                                if (klineIndex >= 0 && klineIndex < reversedKlines.length && 
+                                    originalIndex >= 0 && originalIndex < currentData.bollinger.upper.length) {
+                                    // 判断是否为最新K线（dataIndex = length - 1，因为xAxis从左到右显示）
+                                    // 如果是最新K线，使用实时价格；否则使用收盘价
+                                    const isLatestKline = (dataIndex === currentData.bollinger.upper.length - 1);
+                                    const klinePrice = isLatestKline && currentData.price ? 
+                                        currentData.price : reversedKlines[klineIndex].close;
+                                    
+                                    const bollUpper = currentData.bollinger.upper;
+                                    const bollMiddle = currentData.bollinger.middle;
+                                    const bollLower = currentData.bollinger.lower;
+                                    const envUpper = currentData.envelope.upper;
+                                    const envMiddle = currentData.envelope.middle;
+                                    const envLower = currentData.envelope.lower;
+                                    
+                                    if (bollUpper && bollMiddle && bollLower && 
+                                        envUpper && envMiddle && envLower &&
+                                        originalIndex >= 0 && originalIndex < bollUpper.length && originalIndex < envUpper.length) {
+                                        // 计算该K线的分区号
+                                        const bollZone = calculateZoneForPrice(
+                                            klinePrice,
+                                            bollMiddle[originalIndex],
+                                            bollUpper[originalIndex],
+                                            bollLower[originalIndex]
+                                        );
+                                        const envZone = calculateZoneForPrice(
+                                            klinePrice,
+                                            envMiddle[originalIndex],
+                                            envUpper[originalIndex],
+                                            envLower[originalIndex]
+                                        );
+                                        
+                                        // 调试：如果是最新K线，输出计算信息
+                                        if (isLatestKline) {
+                                            console.log('Tooltip最新K线分区号计算:', {
+                                                klinePrice: klinePrice,
+                                                originalIndex: originalIndex,
+                                                bollMiddle: bollMiddle[originalIndex],
+                                                bollUpper: bollUpper[originalIndex],
+                                                bollLower: bollLower[originalIndex],
+                                                envMiddle: envMiddle[originalIndex],
+                                                envUpper: envUpper[originalIndex],
+                                                envLower: envLower[originalIndex],
+                                                bollZone: bollZone,
+                                                envZone: envZone
+                                            });
+                                        }
+                                        
+                                        result += '<div style="margin: 2px 0; padding: 2px 0; border-top: 1px solid rgba(255,255,255,0.1);">';
+                                        result += '<span style="color: #4A90E2; font-size: 10px;">布林线分区: </span>';
+                                        result += '<span style="color: #fff; font-weight: bold; font-size: 10px;">' + bollZone + '</span>';
+                                        result += '</div>';
+                                        result += '<div style="margin: 2px 0; padding: 2px 0;">';
+                                        result += '<span style="color: #E74C3C; font-size: 10px;">包络线分区: </span>';
+                                        result += '<span style="color: #fff; font-weight: bold; font-size: 10px;">' + envZone + '</span>';
+                                        result += '</div>';
+                                    }
+                                }
+                            }
+                        }
                         result += '</div>';
                     }
                 });
@@ -513,11 +596,18 @@ function updateStatus(text) {
 }
 
 // 更新统一图表
+// 保存当前图表数据，供tooltip使用
+let currentChartData = null;
+
 function updateUnifiedChart(data) {
     if (!data || !data.klines || data.klines.length === 0) {
         console.warn('数据为空或格式错误:', data);
         return;
     }
+    
+    // 保存当前数据，供tooltip使用
+    currentChartData = data;
+    window.currentChartData = data; // 也保存到window对象，供tooltip formatter使用
     
     // 更新平均波动价格值显示
     if (data.volatility !== undefined) {
@@ -760,6 +850,19 @@ function updateUnifiedChart(data) {
     const currentOption = unifiedChart.getOption();
     const hasDataZoom = currentOption && currentOption.dataZoom && currentOption.dataZoom.length > 0;
     
+    // 准备graphic组件，用于在最新价格下方显示分区号
+    // 注意：需要在setOption之后才能使用convertToPixel，所以使用延迟执行
+    const zoneGraphics = [];
+    if (data.bollinger && data.bollinger.zone !== undefined && data.envelope && data.envelope.zone !== undefined) {
+        // 保存分区号数据，在setOption后更新
+        zoneGraphics.push({
+            bollZone: data.bollinger.zone,
+            envZone: data.envelope.zone,
+            latestPrice: data.klines[0].close,
+            latestIndex: timeAxisData.length - 1
+        });
+    }
+    
     const updateOption = {
         xAxis: [
             { gridIndex: 0, data: timeAxisData },
@@ -903,6 +1006,89 @@ function updateUnifiedChart(data) {
                             result += '<span style="color: #eaecef; font-size: 10px;">' + item.name + '</span>: <span style="color: #fff; font-weight: bold; font-size: 10px;">' + item.value + '</span>';
                             result += '</div>';
                         });
+                        // 如果是主看板，显示当前K线的分区号
+                        if (gridIdx === 0) {
+                            const currentData = window.currentChartData;
+                            if (currentData && currentData.bollinger && currentData.envelope) {
+                                // 重要：虽然timeAxisData已经反转了（索引0是最新K线的时间），
+                                // 但ECharts的category类型xAxis从左到右显示，所以：
+                                // - xAxis.data[0] 显示在最左侧（最旧的K线）
+                                // - xAxis.data[length-1] 显示在最右侧（最新的K线）
+                                // 因此：dataIndex=0是最旧K线，dataIndex=length-1是最新K线
+                                // 后端返回的bollinger/envelope数组，索引0是最新数据
+                                // 所以需要转换：
+                                // - dataIndex=length-1（最新）-> originalIndex=0（最新）
+                                // - dataIndex=0（最旧）-> originalIndex=length-1（最旧）
+                                // 转换公式：originalIndex = length - 1 - dataIndex
+                                const originalIndex = currentData.bollinger.upper.length - 1 - dataIndex;
+                                
+                                // 获取反转后的klines数组（klines[0]是最新）
+                                // 注意：currentData.klines是原始顺序（从旧到新），需要反转
+                                const reversedKlines = currentData.klines.slice().reverse();
+                                
+                                // dataIndex对应反转后的klines数组索引（0是最新）
+                                const klineIndex = dataIndex;
+                                
+                                if (klineIndex >= 0 && klineIndex < reversedKlines.length && 
+                                    originalIndex >= 0 && originalIndex < currentData.bollinger.upper.length) {
+                                    // 判断是否为最新K线（dataIndex = length - 1，因为xAxis从左到右显示）
+                                    // 如果是最新K线，使用实时价格；否则使用收盘价
+                                    const isLatestKline = (dataIndex === currentData.bollinger.upper.length - 1);
+                                    const klinePrice = isLatestKline && currentData.price ? 
+                                        currentData.price : reversedKlines[klineIndex].close;
+                                    
+                                    const bollUpper = currentData.bollinger.upper;
+                                    const bollMiddle = currentData.bollinger.middle;
+                                    const bollLower = currentData.bollinger.lower;
+                                    const envUpper = currentData.envelope.upper;
+                                    const envMiddle = currentData.envelope.middle;
+                                    const envLower = currentData.envelope.lower;
+                                    
+                                    if (bollUpper && bollMiddle && bollLower && 
+                                        envUpper && envMiddle && envLower &&
+                                        originalIndex >= 0 && originalIndex < bollUpper.length && originalIndex < envUpper.length) {
+                                        // 计算该K线的分区号
+                                        const bollZone = calculateZoneForPrice(
+                                            klinePrice,
+                                            bollMiddle[originalIndex],
+                                            bollUpper[originalIndex],
+                                            bollLower[originalIndex]
+                                        );
+                                        const envZone = calculateZoneForPrice(
+                                            klinePrice,
+                                            envMiddle[originalIndex],
+                                            envUpper[originalIndex],
+                                            envLower[originalIndex]
+                                        );
+                                        
+                                        // 调试：如果是最新K线，输出计算信息
+                                        if (isLatestKline) {
+                                            console.log('Tooltip最新K线分区号计算:', {
+                                                klinePrice: klinePrice,
+                                                originalIndex: originalIndex,
+                                                bollMiddle: bollMiddle[originalIndex],
+                                                bollUpper: bollUpper[originalIndex],
+                                                bollLower: bollLower[originalIndex],
+                                                envMiddle: envMiddle[originalIndex],
+                                                envUpper: envUpper[originalIndex],
+                                                envLower: envLower[originalIndex],
+                                                bollZone: bollZone,
+                                                envZone: envZone
+                                            });
+                                        }
+                                        
+                                        result += '<div style="margin: 2px 0; padding: 2px 0; border-top: 1px solid rgba(255,255,255,0.1);">';
+                                        result += '<span style="color: #4A90E2; font-size: 10px;">布林线分区: </span>';
+                                        result += '<span style="color: #fff; font-weight: bold; font-size: 10px;">' + bollZone + '</span>';
+                                        result += '</div>';
+                                        result += '<div style="margin: 2px 0; padding: 2px 0;">';
+                                        result += '<span style="color: #E74C3C; font-size: 10px;">包络线分区: </span>';
+                                        result += '<span style="color: #fff; font-weight: bold; font-size: 10px;">' + envZone + '</span>';
+                                        result += '</div>';
+                                    }
+                                }
+                            }
+                        }
                         result += '</div>';
                     }
                 });
@@ -938,6 +1124,159 @@ function updateUnifiedChart(data) {
         notMerge: false,
         lazyUpdate: true
     });
+    
+    // 在setOption之后更新分区号显示（使用实时计算，而不是后端返回的zone）
+    // 注意：图表上显示的分区号应该与tooltip中显示的一致，都使用实时计算
+    setTimeout(() => {
+        const currentData = window.currentChartData;
+        if (currentData && currentData.bollinger && currentData.envelope && currentData.klines.length > 0) {
+            try {
+                // 获取最新K线（klines数组是原始顺序，最后一个是最新）
+                // 使用实时价格（currentData.price），如果没有则使用收盘价
+                const latestPrice = currentData.price || currentData.klines[currentData.klines.length - 1].close;
+                
+                // 获取最新K线对应的布林线和包络线值
+                // 注意：在updateUnifiedChart中，bollinger和envelope数组被反转了（用于图表显示）
+                // 但currentData.bollinger/envelope是原始顺序（从旧到新，最后一个是最新）
+                // 对于气泡分区号，我们需要使用与tooltip相同的逻辑：
+                // - 使用原始数组（currentData.bollinger/envelope）
+                // - 最新K线的索引是数组长度 - 1
+                // - 使用实时价格计算
+                const bollUpper = currentData.bollinger.upper;
+                const bollMiddle = currentData.bollinger.middle;
+                const bollLower = currentData.bollinger.lower;
+                const envUpper = currentData.envelope.upper;
+                const envMiddle = currentData.envelope.middle;
+                const envLower = currentData.envelope.lower;
+                
+                if (bollUpper && bollMiddle && bollLower && 
+                    envUpper && envMiddle && envLower &&
+                    bollUpper.length > 0 && envUpper.length > 0) {
+                    // 重要：后端返回的bollinger/envelope数组，索引0是最新数据（根据indicators包的注释）
+                    // 但根据realtime_service.go中的代码，bollZone使用的是bollMiddle[0]，说明索引0是最新
+                    // 所以最新K线的索引应该是0，而不是length - 1
+                    // 这与tooltip中dataIndex=0时的计算一致：
+                    // tooltip中：dataIndex=0时，originalIndex = length - 1 - 0 = length - 1
+                    // 但这是错误的！应该直接使用0
+                    // 让我检查一下：如果后端数组索引0是最新，那么latestOriginalIndex应该是0
+                    const latestOriginalIndex = 0; // 后端数组索引0是最新数据
+                    
+                    // 实时计算最新K线的分区号（使用实时价格）
+                    // 这与tooltip中dataIndex=0时的计算逻辑完全一致
+                    // 使用与tooltip完全相同的逻辑：
+                    // - 价格：实时价格（currentData.price）或收盘价
+                    // - 索引：latestOriginalIndex（数组长度-1）
+                    // - 数组：原始数组（currentData.bollinger/envelope，未反转）
+                    const bollZone = calculateZoneForPrice(
+                        latestPrice,
+                        bollMiddle[latestOriginalIndex],
+                        bollUpper[latestOriginalIndex],
+                        bollLower[latestOriginalIndex]
+                    );
+                    const envZone = calculateZoneForPrice(
+                        latestPrice,
+                        envMiddle[latestOriginalIndex],
+                        envUpper[latestOriginalIndex],
+                        envLower[latestOriginalIndex]
+                    );
+                    
+                    // 调试：输出计算信息（在计算latestDataIndex之后）
+                    // 注意：latestDataIndex会在下面计算
+                    
+                    // 计算最新K线在图表中的位置
+                    // 重要：虽然timeAxisData已经反转了（索引0是最新K线的时间），
+                    // 但ECharts的category类型xAxis从左到右显示，所以：
+                    // - xAxis.data[0] 显示在最左侧（最旧的K线）
+                    // - xAxis.data[length-1] 显示在最右侧（最新的K线）
+                    // 因此最新K线的dataIndex应该是timeAxisData.length - 1
+                    // 但分区值计算时，需要使用原始数组的最后一个索引（latestOriginalIndex）
+                    const timeAxisData = currentData.klines.map(k => {
+                        if (!k.time) return '';
+                        const date = new Date(k.time);
+                        return date.toLocaleString('zh-CN', { 
+                            month: '2-digit', 
+                            day: '2-digit', 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                        });
+                    }).reverse();
+                    // 最新K线在图表中的dataIndex（最右侧）
+                    const latestDataIndex = timeAxisData.length - 1;
+                    
+                    // 调试：输出计算信息
+                    console.log('气泡分区号计算:', {
+                        latestPrice: latestPrice,
+                        latestOriginalIndex: latestOriginalIndex,
+                        latestDataIndex: latestDataIndex, // 最右侧，最新K线
+                        timeAxisDataLength: timeAxisData.length,
+                        bollMiddle: bollMiddle[latestOriginalIndex],
+                        bollUpper: bollUpper[latestOriginalIndex],
+                        bollLower: bollLower[latestOriginalIndex],
+                        envMiddle: envMiddle[latestOriginalIndex],
+                        envUpper: envUpper[latestOriginalIndex],
+                        envLower: envLower[latestOriginalIndex],
+                        bollZone: bollZone,
+                        envZone: envZone
+                    });
+                    
+                    const pixelPoint = unifiedChart.convertToPixel(
+                        { gridIndex: 0 },
+                        [latestDataIndex, latestPrice]
+                    );
+                    
+                    if (pixelPoint && !isNaN(pixelPoint[0]) && !isNaN(pixelPoint[1])) {
+                        // 在最新价格下方显示分区号
+                        const textY = pixelPoint[1] + 15; // 价格下方15px
+                        
+                        // 气泡分区号分两排显示，避免重叠
+                        const zoneGraphicsArray = [
+                            {
+                                type: 'text',
+                                z: 200,
+                                left: pixelPoint[0] - 30,
+                                top: textY,
+                                style: {
+                                    text: '布林:' + bollZone,
+                                    fill: '#4A90E2',
+                                    fontSize: 11,
+                                    fontWeight: 'bold'
+                                },
+                                silent: true
+                            },
+                            {
+                                type: 'text',
+                                z: 200,
+                                left: pixelPoint[0] - 30,
+                                top: textY + 15, // 第二排，向下15px
+                                style: {
+                                    text: '包络:' + envZone,
+                                    fill: '#E74C3C',
+                                    fontSize: 11,
+                                    fontWeight: 'bold'
+                                },
+                                silent: true
+                            }
+                        ];
+                        
+                        // 获取现有的对齐线（如果有）
+                        const currentOption = unifiedChart.getOption();
+                        const existingGraphics = currentOption.graphic || [];
+                        const alignmentLines = existingGraphics.filter(g => g && g.type === 'line');
+                        
+                        // 合并分区号文本和对齐线
+                        const allGraphics = alignmentLines.concat(zoneGraphicsArray);
+                        unifiedChart.setOption({
+                            graphic: allGraphics
+                        }, {
+                            notMerge: false
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error('计算分区号位置失败:', e);
+            }
+        }
+    }, 100);
 }
 
 // 计算价格波动率和Y轴范围
@@ -1064,9 +1403,17 @@ function syncChartsCrosshair() {
                 }
             }
             
-            // 更新图表的graphic配置
+            // 更新图表的graphic配置（保留分区号显示）
+            const currentOption = unifiedChart.getOption();
+            const existingGraphics = currentOption.graphic || [];
+            // 保留分区号相关的graphic（type为'text'的）
+            const zoneTexts = existingGraphics.filter(g => g && g.type === 'text');
+            // 合并对齐线和分区号
+            const allGraphics = graphics.concat(zoneTexts);
             unifiedChart.setOption({
-                graphic: graphics
+                graphic: allGraphics
+            }, {
+                notMerge: false  // 重要：使用notMerge: false确保完全替换graphic，但保留分区号文本
             });
             
             // 显示tooltip - 触发第一个系列，formatter会自动收集所有数据
@@ -1078,10 +1425,16 @@ function syncChartsCrosshair() {
         }
     });
     
-    // 鼠标移出时清除对齐线和tooltip
+    // 鼠标移出时清除对齐线（但保留分区号显示）
     zr.on('mouseout', function() {
+        const currentOption = unifiedChart.getOption();
+        const existingGraphics = currentOption.graphic || [];
+        // 只保留分区号相关的graphic（type为'text'的）
+        const zoneTexts = existingGraphics.filter(g => g && g.type === 'text');
         unifiedChart.setOption({
-            graphic: []
+            graphic: zoneTexts
+        }, {
+            notMerge: false
         });
         unifiedChart.dispatchAction({
             type: 'hideTip'
@@ -1149,6 +1502,56 @@ function updateConfigInputs(config) {
     
     document.getElementById('rsi-period1').value = config.rsi_period1 || 48;
     document.getElementById('rsi-period2').value = config.rsi_period2 || 72;
+}
+
+// 计算价格所在的分区号（前端版本）
+function calculateZoneForPrice(price, middle, upper, lower) {
+    if (middle === 0) {
+        return 0;
+    }
+    
+    // 如果价格在中轨，返回0
+    if (Math.abs(price - middle) < 0.0001) {
+        return 0;
+    }
+    
+    // 计算价格相对于中轨的位置
+    if (price > middle) {
+        // 价格在中轨上方
+        const upperRange = upper - middle;
+        if (upperRange <= 0) {
+            return 10; // 如果上轨等于中轨，返回最大分区
+        }
+        // 计算分区：0到+10
+        const ratio = (price - middle) / upperRange;
+        let zone = Math.floor(ratio * 10);
+        if (zone >= 10) {
+            zone = 10;
+        }
+        if (zone < 1) {
+            zone = 1;
+        }
+        return zone;
+    } else {
+        // 价格在中轨下方
+        const lowerRange = middle - lower;
+        if (lowerRange <= 0) {
+            return -10; // 如果下轨等于中轨，返回最小分区
+        }
+        // 计算分区：0到-10
+        // 将中轨到下轨的范围等分为10个分区
+        const ratio = (middle - price) / lowerRange;
+        let zone = Math.floor(ratio * 10);
+        // 确保zone是负数
+        zone = -zone;
+        if (zone <= -10) {
+            zone = -10;
+        }
+        if (zone > -1) {
+            zone = -1;
+        }
+        return zone;
+    }
 }
 
 // 显示配置面板
