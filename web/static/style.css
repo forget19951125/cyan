@@ -119,6 +119,27 @@ body {
     gap: 15px;
 }
 
+.volatility-display {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: rgba(243, 186, 47, 0.1);
+    border: 1px solid rgba(243, 186, 47, 0.3);
+    border-radius: 4px;
+}
+
+.volatility-label {
+    color: #848e9c;
+    font-size: 0.85em;
+}
+
+.volatility-value {
+    color: #f3ba2f;
+    font-size: 0.9em;
+    font-weight: bold;
+}
+
 .grid-toggle {
     display: flex;
     align-items: center;

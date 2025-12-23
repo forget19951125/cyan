@@ -36,15 +36,16 @@ type ConfigRepository interface {
 
 // RealtimeData 实时数据
 type RealtimeData struct {
-	Symbol    string                `json:"symbol"`
-	Timestamp time.Time             `json:"timestamp"`
-	Price     float64               `json:"price"`
-	Klines    []KlineData           `json:"klines"`
-	CCI       map[string][]float64  `json:"cci"`
-	MACD      map[string]MACDValues `json:"macd"`
-	RSI       map[string][]float64  `json:"rsi"`
-	Bollinger BollingerData         `json:"bollinger"`
-	Envelope  EnvelopeData          `json:"envelope"`
+	Symbol     string                `json:"symbol"`
+	Timestamp  time.Time             `json:"timestamp"`
+	Price      float64               `json:"price"`
+	Klines     []KlineData           `json:"klines"`
+	CCI        map[string][]float64  `json:"cci"`
+	MACD       map[string]MACDValues `json:"macd"`
+	RSI        map[string][]float64  `json:"rsi"`
+	Bollinger  BollingerData         `json:"bollinger"`
+	Envelope   EnvelopeData          `json:"envelope"`
+	Volatility float64               `json:"volatility"` // 5天平均波动价格值（不包括当前日）
 }
 
 // KlineData K线数据
@@ -190,8 +191,8 @@ func (r *RealtimeService) UpdateSymbolAndInterval(symbol types.Symbol, interval 
 			}
 		}
 
-		// 重新获取K线数据
-		limit, err := types.CalculateKlinesForDays(14, interval)
+		// 重新获取K线数据（至少7天，确保有足够的数据计算5天平均波动价格）
+		limit, err := types.CalculateKlinesForDays(7, interval)
 		if err != nil {
 			log.Printf("计算K线数量失败: %v, 使用默认值500", err)
 			limit = 500
@@ -231,8 +232,9 @@ func (r *RealtimeService) UpdateSymbolAndInterval(symbol types.Symbol, interval 
 
 // Start 启动实时服务
 func (r *RealtimeService) Start(ctx context.Context) error {
-	// 计算14天需要多少根K线
-	limit, err := types.CalculateKlinesForDays(14, r.interval)
+	// 计算至少7天需要多少根K线（确保有足够的数据计算5天平均波动价格）
+	// 使用7天而不是14天，因为只需要5天的数据，但需要确保有足够的数据覆盖
+	limit, err := types.CalculateKlinesForDays(7, r.interval)
 	if err != nil {
 		log.Printf("计算K线数量失败: %v, 使用默认值500", err)
 		limit = 500
@@ -314,8 +316,8 @@ func (r *RealtimeService) klineUpdateLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// 计算14天需要多少根K线
-			limit, err := types.CalculateKlinesForDays(14, r.interval)
+			// 计算至少7天需要多少根K线（确保有足够的数据计算5天平均波动价格）
+			limit, err := types.CalculateKlinesForDays(7, r.interval)
 			if err != nil {
 				log.Printf("计算K线数量失败: %v, 使用默认值500", err)
 				limit = 500
@@ -442,6 +444,11 @@ func (r *RealtimeService) calculateAndPush() {
 	envPeriod := scalePeriod(config.Env_Period)
 	envUpper, envMiddle, envLower := indicators.CalculateEnvelope(hlcc, envPeriod, config.Env_Deviation)
 
+	// 计算5天平均波动价格值（不包括当前日，不受K线周期影响，固定取前5个自然天）
+	// klines数组是原始顺序（从旧到新），CalculateVolatility5Days需要这个顺序
+	// 但函数内部会跳过索引0（当前日），所以直接传入klines即可
+	volatility := indicators.CalculateVolatility5Days(klines)
+
 	// 准备K线数据
 	klineData := make([]KlineData, len(klines))
 	for i := 0; i < len(klines); i++ {
@@ -458,13 +465,14 @@ func (r *RealtimeService) calculateAndPush() {
 
 	// 构建实时数据
 	data := &RealtimeData{
-		Symbol:    string(r.symbol),
-		Timestamp: time.Now(),
-		Price:     close[0],
-		Klines:    klineData,
-		CCI:       cciMap,
-		MACD:      macdMap,
-		RSI:       rsiMap,
+		Symbol:     string(r.symbol),
+		Timestamp:  time.Now(),
+		Volatility: volatility,
+		Price:      close[0],
+		Klines:     klineData,
+		CCI:        cciMap,
+		MACD:       macdMap,
+		RSI:        rsiMap,
 		Bollinger: BollingerData{
 			Upper:  bollUpper,
 			Middle: bollMiddle,

@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>指标看板 - Binance</title>
+    <title>Cyan - Binance</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
 </head>
 <body>
     <div class="container">
         <header class="header">
-            <h1>📊 指标看板</h1>
+            <h1>📊 CYan</h1>
             <div class="controls">
                 <select id="symbol-selector" class="control-item">
                     <option value="BTCUSDT" selected>BTCUSDT</option>
@@ -35,6 +35,10 @@
                 <div class="dashboard-header">
                     <h2>指标看板</h2>
                     <div class="header-controls">
+                        <div class="volatility-display" id="volatility-display">
+                            <span class="volatility-label">5天平均波动价格:</span>
+                            <span class="volatility-value" id="volatility-value">--</span>
+                        </div>
                         <label class="grid-toggle">
                             <input type="checkbox" id="grid-toggle" checked onchange="toggleGridLines()">
                             <span>网格线</span>

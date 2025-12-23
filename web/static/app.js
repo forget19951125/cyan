@@ -519,6 +519,14 @@ function updateUnifiedChart(data) {
         return;
     }
     
+    // 更新平均波动价格值显示
+    if (data.volatility !== undefined) {
+        const volatilityElement = document.getElementById('volatility-value');
+        if (volatilityElement) {
+            volatilityElement.textContent = data.volatility.toFixed(2);
+        }
+    }
+    
     // 准备时间轴数据
     const timeAxisData = data.klines.map(k => {
         if (!k.time) return '';
